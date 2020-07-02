@@ -1,0 +1,532 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>YAHNDA</title>
+
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/pygment_trac.css">
+
+    <meta name="viewport" content="width=device-width">
+  </head>
+  <body>
+
+    <div class="wrapper">
+      <header>
+        <h1>Yet Another Hacker News Data Analysis</h1>
+
+        <table>
+          <body>
+            <tr><td><a href="/">./dev</a></td></tr>
+           <tr>
+              <td>
+                <br /> <br /> <br />
+                <p><small> Original theme by <a href="https://github.com/orderedlist">orderedlist</a> (CC-BY-SA)</small></p>
+
+                <br />
+                <p>
+                Where applicable, all content is licensed under a <a rel="license" href="https://creativecommons.org/publicdomain/zero/1.0/">CC0</a>.
+                <br />
+
+                <a rel="license" href="http://creativecommons.org/licenses/cc0/1.0/"><img alt="Creative Commons License" style="border-width:0" src="/img/cc-zero_skinny.png" /></a>
+                </p>
+              </td>
+            </tr>
+          </body>
+        </table>
+
+      </header>
+      <section>
+
+        <h1 id="yet-another-hacker-news-data-analysis">Yet Another Hacker News Data Analysis</h1>
+<ul>
+<li>Introduction</li>
+<li>Analysis</li>
+<li>Overview</li>
+<li>User Information Investigation</li>
+<li>Time Analysis</li>
+<li>Word Clouds</li>
+<li>Topic Modeling</li>
+<li>Appendix</li>
+<li>Data Analysis Scripts</li>
+<li>Database Schema</li>
+<li>Data Retrieval</li>
+</ul>
+<h2 id="introduction">Introduction</h2>
+<p>Doing a search for a snapshot of the HN API data provided some options but nothing
+recent and nothing with user information also present.
+I decided to scrape what was available from the HN data through their very
+nice <a href="https://github.com/HackerNews/API">API</a> and do some rudimentary analysis.</p>
+<p>To get a copy of the database to play around with yourself, a snapshot
+has been provided as a SQLite file along with the compressed 'raw' JSON files.
+The raw data is about 3.6Gb compressed and the SQLite file is 4.3G compressed and 13G uncompressed.</p>
+<p>All source code, unless otherwise stated, as well as text and other data, is provided
+under a CC0/public domain license.
+The Hacker News itself is proprietary and so please check with with the
+<a href="https://www.ycombinator.com/legal/#tou">Terms of Use</a>.
+I am, no doubt, violating their terms of use so I'm hoping they won't sue me
+or take down the data as I'm providing it in the hacker friendly spirit of
+data sharing and transparency.</p>
+<p>There's nothing novel here, aside, maybe, from an easily downloadable database.
+The analysis presented here is a light hearted meandering through different
+aspects of the HN site data.</p>
+<p>That being said, I imagine a lot of people thinking "so what?" and I'd be hard pressed
+to argue with them.</p>
+<p>So what? So what! Why not! Let's take a look at Hacker News data!</p>
+<h2 id="analysis">Analysis</h2>
+<h3 id="overview">Overview</h3>
+<p>First let's get an overview of the data:</p>
+<pre><code>sqlite&gt; select count(*) from users;
+558905
+sqlite&gt; select count(*) from item;
+23669105
+</code></pre>
+
+<p>A breakdown of different types of item data:</p>
+<pre><code>sqlite&gt; select count(id), type from item group by type ;
+count(id)|type
+19882923|comment
+13014|job
+1788|poll
+12164|pollopt
+3759216|story
+</code></pre>
+
+<hr />
+<p>Different item data, grouped by month, through time:</p>
+<pre><code>sqlite&gt; select count(id), type, substr(datetime(time, 'unixepoch', 'localtime'), 0, 8) mo  from item group by mo, type order by mo asc;
+...
+255028|comment|2020-04
+52|job|2020-04
+2|poll|2020-04
+7|pollopt|2020-04
+38330|story|2020-04
+296004|comment|2020-05
+63|job|2020-05
+1|poll|2020-05
+9|pollopt|2020-05
+40093|story|2020-05
+259768|comment|2020-06
+71|job|2020-06
+34168|story|2020-06
+</code></pre>
+
+<h3 id="user-information-investigation">User Information Investigation</h3>
+<h4 id="user-item-frequency">User Item Frequency</h4>
+<p>How about the frequency of user item creating (polls, comments, stories, etc.), making sure to filter out blank <code>by</code> fields:</p>
+<pre><code>sqlite&gt; select count(id) c, by from item where by != '' group by by order by c desc;
+c|by
+51639|tptacek
+40333|jacquesm
+39999|dang
+34255|rbanffy
+33216|dragonwriter
+31837|pjmlp
+25573|coldtea
+24766|TeMPOraL
+24666|DanBC
+22665|icebraining
+...
+</code></pre>
+
+<p>Either because my SQL knowledge is substandard or I don't know what I'm doing with the indexes, I found queries took too long in SQL.
+Parsing the JSON directly yields faster results for me.</p>
+<p>After some data munging, we get: </p>
+<pre><code>zcat $datadir/hn-item*.ajson.gz | \
+  jq -r -c '.by ' | \
+  grep -P -v '^$' | \
+  grep -P -v '^null$' | \
+  sort | \
+  uniq -c | \
+  sort -nr | \
+  sed 's/^ *//' &gt; user_item_freq.gp
+cut -f1 -d' ' user_item_freq.gp | \
+  sort | \
+  uniq -c | \
+  sort -nr | \
+  sed 's/^ *//'  | \
+  awk '{ print $2, $1; }' &gt; user_item_freq_freq.gp
+./zipf-mle user_item_freq.gp &gt; user_item-exponent-mle.txt
+</code></pre>
+
+<p>Looking at a log-log plot of the graph:</p>
+<p>Ah! The tell-tale sign of a power law distribution.</p>
+<p>Here it is broken out by <code>story</code> and <code>comment</code> items:</p>
+<p>The y-axis being the number of users which have that frequency of item creation and the x-axis is the number of
+items created.
+For example, you can see <code>tptacek</code> far out on the right, being the only user to have 51639 items created, whereas
+users that only have 1 comment, say, are much more frequent.
+For context, I'm at 224 item creation (comments and stories combined) and fall in the middle.</p>
+<p>Thanks to <a href="https://www.johndcook.com/blog/2015/11/24/estimating-the-exponent-of-discrete-power-law-data/">John D. Cook</a> we can copy-pasta
+the maximum likelihood estimator (MLE) code to give us a value of 1.58 for the exponent for all items, 1.54 for comments and 1.77 for stories.
+As <a href="https://en.wikipedia.org/wiki/Stable_distribution">a sanity check</a>, they all fall in the range of <code>(1,3)</code>, which is expected
+for fat-tailed distributions.</p>
+<p>What does it mean? I dunno <code>-\_(:|)_/-</code></p>
+<h4 id="user-urls">User URLs</h4>
+<p>Let's take a look at the common URLs in the <code>about</code> field from the users on HN.
+Getting URLs from the <code>about</code> field in the <code>users</code> table is difficult to do in vanilla SQLite3 syntax, so excuse
+the bash incantation:</p>
+<pre><code>sqlite3 hn.sqlite &lt; &lt;( echo 'select about from users where about like &quot;%https:%&quot;;' ) | \
+  sed 's/&amp;#x2F;/\//g' | \
+  grep -o -P 'https?://[a-zA-Z0-9\.-]*' | \
+  sort | \
+  uniq -c | \
+  sort -rn 
+</code></pre>
+
+<p>One thing that jumps out is the prevalence of <code>keybase.io</code>.
+I can only assume that Y-Combinator has some close relationship to <code>keybase.io</code>, maybe going to far as
+insisting folks going through their program use it.</p>
+<p>Another point of note is the high occurrence of sites like <code>hackernewsers.com</code>.
+An unkind interpretation would be that some folks are trying to game the HN system
+to give a signal boost to their site.</p>
+<p>Note that this analysis counts subdomains as separate URLs.
+I don't want to get too far into the weeds with this analysis but your own
+could include better handling and binning of URLs like <code>github.io</code> or <code>tumblr.com</code> sites.</p>
+<h4 id="item-frequency-by-time">Item Frequency by Time</h4>
+<p>Let's start with looking at activity of stories and comments during the day.
+So we're not deluged by extraneous data, let's just take data from Jan 1st 2020 (unixtime <code>1577854800</code>):</p>
+<pre><code>echo 'select substr(datetime(time, &quot;unixepoch&quot;, &quot;utc&quot;), 12, 5) t from item where time &gt;= 1577854800 and time != &quot;&quot; ;' | \
+  sqlite3 hn.sqlite | \
+  tr ':' ' ' | \
+  awk '{ print ($1 &lt; 10)? ($1+24 + $2/(60)) : ($1+$2/60), $3; }' | \
+  sort -n 
+</code></pre>
+
+<p>Whoa! Seems like a pretty clear signal.</p>
+<p>Let's shift so we see the trend with a bit more clarity:</p>
+<pre><code>echo 'select substr(datetime(time, &quot;unixepoch&quot;, &quot;utc&quot;), 12, 5) t from item where time &gt;= 1577854800 and time != &quot;&quot; ;' | \
+  sqlite3 hn.sqlite | \
+  tr ':' ' ' | \
+  awk '{ print ($1 &lt; 10)? ($1+24 + $2/(60)) : ($1+$2/60), $3; }' | \
+  sort -n 
+</code></pre>
+
+<p>16:00 UTC is 09:00 AM PT, so I would guess HN is pretty (US) west coast centric with the majority of activity happening
+at the start of the business day.</p>
+<p>I wouldn't guess any big surprises, but let's split it out by stories and comments:</p>
+<p>Note that the story submissions are much less prevalent than comments and are plotted with different Y axies.</p>
+<p>It should be obvious but I only realized this in retrospect from looking at the data that comments have a lag
+behind stories, for probably obvious reasons.</p>
+<hr />
+<p>Let's see if we can pick out any weekend effects.</p>
+<p>Again, no big surprises.</p>
+<p>Here, 0 is Sunday and 6 is Saturday (the results of using <code>%w</code> in <code>strftime</code>) and times are in UTC properly rescaled.</p>
+<p>I would guess most people interact with HN during the weekday and peter off on the weekends, with Sunday being the least active day.</p>
+<h4 id="story-word-clouds">Story Word Clouds</h4>
+<p>Let's look at a trigram word cloud for stories in 2019 and 2020 (so far):</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><img alt="HN 2019 Trigrams" src="./img/hn-2019-trigram.png" /></td>
+<td><img alt="HN 2020 Trigrams" src="./img/hn-2020-trigram.png" /></td>
+</tr>
+</tbody>
+</table>
+<p>Please excuse the underscores I'm being lazy and constructing "single" words by concatenating three words together
+to fool <a href="https://github.com/amueller/word_cloud/">amueller/word_cloud/</a> into constructing the word cloud.</p>
+<p>Note that these are for stories that have a score of more than 30.
+The mangling of the title might also have an effect, so take care to not read too much into the word cloud.
+Also note that I don't think there's a way to really get at what stories were on the front page with this data
+so that might skew interpretation.</p>
+<p>You can also see some topical subjects from 2019, like the Hong Kong protests, the Boeing 737 and Raspberry Pi 4.
+I guess the take away is there's a lot of 'ask' and 'show' stories that are popular.
+I would interpret this as the community tends to like posts that they can actively engage in.
+It'll be a cute meta-analysis to see if this post lands on the front page of HN ;).</p>
+<p>I picked tri-grams pretty arbitrarily.
+Single words and bi-grams don't really provide enough information to be interesting to me.
+Tri-grams look to have just enough interesting information to at least give the illusion
+of insight before being drowned out by the combinatorial explosion of choices.</p>
+<h4 id="story-topic-modeling">Story Topic Modeling</h4>
+<p>Engaging in some more tea leaf reading, we can do some <a href="http://mallet.cs.umass.edu/topics.php">topic modeling</a>.
+Topic modelling is new to me but I discovered it
+from the excellent <a href="https://greg.blog/2013/01/26/unix-bi-grams-tri-grams-and-topic-modeling/">blog post on using UNIX for Bi/Tri-Grams</a>.</p>
+<p>Running a query against 2020 HN stories (so far):</p>
+<pre><code>sqlite3 .hn.sqlite &lt; &lt;( echo &quot;select title  from item where type = 'story' and score &gt; 30 and score != ''  and time &gt;= 1546318800 and time &lt;= 1609477200; &quot; ) &gt; hn-story-2020.txt
+bin/mallet import-file \
+  --input hn-story-2020.txt \
+  --output data.mallet \
+  --keep-sequence \
+  --remove-stopwords
+bin/mallet train-topics \
+  --input data.mallet \
+  --alpha 50.0 \
+  --beta 0.01 \
+  --num-topics 100 \
+  --num-iterations 1000 \
+  --optimize-interval 10 \
+  --output-topic-keys data.topic-keys.out \
+  --topic-word-weights-file data.topic-word-weights.out
+cut -f2- data.topic-keys.out | sort -rn | head -n10
+</code></pre>
+
+<pre><code>0.06478 library rust javascript python compiler released fast code webassembly part css modern simple small scratch faster framework video written built 
+0.06366 work remote people job company employees working workers home hard don’t companies don't culture jobs staff teams hour find made 
+0.06013 data users personal tracking science location access phone user private breach facebook customers information passwords records app web collection selling 
+0.05564 facebook google ads users privacy twitter account amazon instagram policy accounts back content videos youtube group online whatsapp user concerns 
+0.05533 years project year time life side business ago month start work family what's minutes months building past history making today 
+0.05478 tech company big students technology startup companies startups surveillance list chinese u.s build fall robot college french online days internet 
+0.05056 software engineering developers developer learn guide engineers good engineer code development tools team programmer resources working writing projects learned coding 
+0.04906 make money people makes making things internet house don't feel hard made sense big worse living easier bad job claims 
+0.04872 web app development build framework apps platform built react design tools modern site open-source applications application server desktop based mobile 
+0.04617 coronavirus covid u.s pandemic global fight virus due testing tests response state point lockdown spread test positive emergency reduce set 
+...
+</code></pre>
+
+<p>(Note the above does not represent 'functioning' code, refer to <a href="./scripts/construct-plots">scripts/construct-plots</a> for actual invocation).</p>
+<p>Rust/Javascript/Python/WebAssembly Library/Framework/Compiler?
+Remote work/home workers?
+Personal data tracking/private phone breach/customer selling breach?
+Sure, sounds like HN, I guess.</p>
+<h4 id="comment-sentiment-analysis">Comment Sentiment Analysis</h4>
+<p>I really don't know how relevant this is to anything but
+we can run <a href="https://github.com/cjhutto/vaderSentiment">vaderSentiment</a> on some of the more recent comments.</p>
+<pre><code>echo 'select text from item where type = &quot;comment&quot; order by id desc limit 10000;' | \
+  sqlite3 hn.sqlite | \
+  ./sentiment 
+</code></pre>
+
+<p>Where the program, <code>sentiment</code>, is copy-pasta'd from one of the examples from <code>vaderSentiment</code>:</p>
+<pre><code>#!/usr/bin/python3
+import sys
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+sentences = []
+for line in sys.stdin:
+  line = line.strip()
+  sentences.append(line)
+analyzer = SentimentIntensityAnalyzer()
+for sentence in sentences:
+  vs = analyzer.polarity_scores(sentence)
+  print(&quot;{:-&lt;1000} {}&quot;.format(sentence, str(vs)))
+</code></pre>
+
+<p>Here's a semi-log plot of the sentiments for the last 10k comments (as of the time of scraping) split out by positive, negative, neutral and "compound":</p>
+<p>From the <code>vaderSentiment</code> page:</p>
+<blockquote>
+<p>The compound score is computed ... then normalized to be between -1 (most extreme negative) and +1 (most extreme positive).
+This is the most useful metric if you want a single unidimensional measure of sentiment for a given sentence.</p>
+</blockquote>
+<p>I guess comments tend to be slightly more positive than negative?</p>
+<h4 id="individual-user-sentiment">Individual User Sentiment</h4>
+<p>Let's pick on a particular user, <code>patio11</code> say, and see what we can glean from their comments using the same Topic Modelling script from above.
+Specifically, we'll run the topic modelling from above on 15 topics:</p>
+<pre><code>sqlite3 hn.sqlite &lt; &lt;( echo 'select type,text from item where by = &quot;patio11&quot; and type = &quot;comment&quot;  ;' ) &gt; patio11.comment
+
+</code></pre>
+
+<pre><code>0.60089 time day don't work i'm email years back call days business hours you're make week minutes i've phone put customer 
+0.59597 people don't you're make good things money lot they're business problem time folks isn't making stuff i'm world problems makes 
+0.41363 software business money customers pay month sales price sell people cost buy product costs businesses customer year make selling paying 
+0.37823 number data question people answer numbers word case fact e.g actual means results language simple information point words things world 
+0.27846 work company job employees working engineers companies salary year clients hire professional employee hiring engineer consulting jobs people years market 
+0.21117 code rails web server app user java data application system api users software write apps ruby file database oss e.g 
+0.19565 google page site users content a/b testing search seo bingo adwords test conversion ads website user pages internet link don't 
+0.16512 you&amp;#x i&amp;#x don&amp;#x they&amp;#x it&amp;#x that&amp;#x we&amp;#x e.g doesn&amp;#x people quot quot;i isn&amp;#x company companies can&amp;#x didn&amp;#x things feel f;etc 
+0.14622 japanese japan american food live country tokyo americans government town local water chinese poor office space america city car apartment 
+0.13561 credit bank business tax money account card pay paypal income taxes insurance year cash payment financial risk payments accountant interest 
+0.12715 blog book writing books post write read amazon article email video list posts reading marketing comment topic nyt comments media 
+0.11497 legal law security information lawyer system letter account password email address government state states access public policy mail domain check 
+0.10383 school game university class students games degree college teachers education english high middle student schools american years math academic blah 
+0.08531 bitcoin million company market money stock transaction investors investment shares dollars fund worth funds billion exchange invest returns transactions founders 
+0.04306 nofollow rel href f;&amp;#x https:&amp;#x http:&amp;#x http://news.ycombinator.com/item?id http://www.kalzumeus.com f;item?id f;news.ycombinator.com&amp;#x f;stripe.com&amp;#x http://images html version pdf gur post read years comment 
+</code></pre>
+
+<p>From a blog post by <a href="https://danluu.com/hn-comments/">luu</a>, we know that <code>patio11</code> is focused on business related comments.
+From the word salad above, I would guess <code>patio11</code> is also interested 
+in Japanese culture, some legal issues, maybe some Bitcoin related issues, Bingo, etc.
+From <code>patio11</code>'s profile, we see some related Internet, Stripe and Bingo related issues...so, sure?</p>
+<p>Still seems like reading tea leaves but squinting at it a certain way and you can maybe build a narrative from the above word salad.</p>
+<hr />
+<p>For context here's myself restricted to 5 topics:</p>
+<pre><code>0.1432  f;&amp;#x https:&amp;#x rel nofollow href f;wiki&amp;#x f;en.wikipedia.org&amp;#x http:&amp;#x f;github.com&amp;#x i&amp;#x f;album&amp;#x data it&amp;#x f;stratfordct.bandcamp.com&amp;#x music pdf open there&amp;#x f;www.youtube.com&amp;#x terms 
+0.09759 source open software it&amp;#x license code hardware data don&amp;#x i&amp;#x work making free&amp;#x design projects make good machine considered f;libre 
+0.07996 it&amp;#x i&amp;#x you&amp;#x good people there&amp;#x time books understand system isn&amp;#x theory problems tools unix they&amp;#x that&amp;#x f;www.amazon.com&amp;#x find hard 
+0.04972 code pre people time poverty energy the\n ppivnwy?t f;o phi(q we’re population talking order growth pinker function repeated copyright real 
+0.03197 distribution power random distributions law laws f;stable_distribution variance finite variables limiting rng sum normal number gaussian independent distributed tails find 
+</code></pre>
+
+<p>Free/libre software? Power law random distributions?
+Sure, sort of sounds like me.</p>
+<h4 id="conclusion">Conclusion</h4>
+<p>Thus concludes our meandering tour of the HN dataset.</p>
+<p>I don't think there's anything new or novel here but it was fun to do.</p>
+<p>Hopefully you've enjoyed it too!</p>
+<p>Suggestions, comments, PRs, etc. welcome!</p>
+<h2 id="appendix-data-analysis-scripts">Appendix: Data Analysis Scripts</h2>
+<p><code>bigram-freq</code> (taken from <a href="https://greg.blog/2013/01/26/unix-bi-grams-tri-grams-and-topic-modeling/">src</a>):</p>
+<pre><code>#!/bin/bash
+infn=&quot;$1&quot;
+if [[ &quot;$infn&quot; == &quot;&quot; ]] ; then infn=/dev/stdin ; fi
+tmp0=`mktemp`
+tmp1=`mktemp`
+cat $infn | tr '[:upper:]' '[:lower:]' | tr -d '[:punct:]' | sed 's/,//' | sed G | tr ' ' '\n' &gt; $tmp0
+tail -n+2 $tmp0 &gt; $tmp1
+paste -d ',' $tmp0 $tmp1 | grep -v -e &quot;^,&quot; | grep -v -e &quot;,$&quot; | sort | uniq -c | sort -rn
+rm -f $tmp0 $tmp1
+</code></pre>
+
+<p>and <code>trigram-freq</code>:</p>
+<pre><code>nfn=&quot;$1&quot;
+if [[ &quot;$infn&quot; == &quot;&quot; ]] ; then infn=/dev/stdin ; fi
+tmp0=`mktemp`
+tmp1=`mktemp`
+tmp2=`mktemp`
+cat $infn | tr '[:upper:]' '[:lower:]' | tr -d '[:punct:]' | sed 's/,//' | sed G | tr ' ' '\n' &gt; $tmp0
+tail -n+2 $tmp0 &gt; $tmp1
+tail -n+2 $tmp1 &gt; $tmp2
+paste -d ',' $tmp0 $tmp1 $tmp2 | \
+  grep -v -e &quot;^,&quot; | \
+  grep -v -e &quot;,$&quot; | \
+  grep -v -e &quot;,,&quot; | \
+  sort | \
+  uniq -c | \
+  sort -rn
+rm -f $tmp0 $tmp1 $tmp2
+</code></pre>
+
+<p>MLE for <a href="https://en.wikipedia.org/wiki/Zipf%27s_law">Zipf distributions</a> (aka <a href="https://en.wikipedia.org/wiki/Power_law">power law</a> tailed distributions)
+ (coutesy of <a href="https://www.johndcook.com/blog/2015/11/24/estimating-the-exponent-of-discrete-power-law-data/">John D. Cook</a>):</p>
+<pre><code>#!/usr/bin/python3
+#
+# 
+
+import re
+import sys
+from scipy import log
+from scipy.special import zeta
+from scipy.optimize import bisect 
+
+import numpy as np
+import numpy.random
+
+ifn=&quot;&quot;
+if len(sys.argv) &gt; 1:
+  ifn = sys.argv[1]
+
+if ifn==&quot;&quot;:
+  print(&quot;provide input&quot;)
+  sys.exit(-1)
+
+
+_x = []
+with open(ifn, &quot;r&quot;) as fp:
+  for line in fp:
+    line = line.strip()
+    if len(line) == 0: continue
+    #a = line.split(&quot;\t&quot;)
+    a = re.split('\t| ', line)
+    f = float(a[0])
+    _x.append(f)
+
+#alpha = 1.5
+#n = 5000
+#x = numpy.random.zipf(alpha, n)
+x = np.array(_x)
+
+#xmin = 1
+xmin = 1
+
+def log_zeta(x):
+  return log(zeta(x, 1))
+
+def log_deriv_zeta(x):
+  h = 1e-5
+  return (log_zeta(x+h) - log_zeta(x-h))/(2*h)
+
+t = -sum( log(x/xmin) )/float(len(x))
+def objective(x):
+  return log_deriv_zeta(x) - t
+
+a, b = 1.01, 10
+alpha_hat = bisect(objective, a, b, xtol=1e-6)
+print(alpha_hat)
+
+</code></pre>
+
+<h2 id="appendix-data-retrieval">Appendix: Data Retrieval</h2>
+<p>A combination of C programs and shell scripts were used to scrape the Hacker News (HN) API.
+The following C programs were used:</p>
+<ul>
+<li><code>hn-parallel-item.c</code> - Parallel curl requests (200) for item retrieval</li>
+<li><code>hn-parallel-user.c</code> - Parallel curl requests (200) for user information retrieval</li>
+<li><code>scrape-hn</code> - manager script to batch download items and compress them</li>
+<li><code>hna</code> - helper script to make simple command line HN API requests</li>
+</ul>
+<p>The Curl programs were modified from the Curl examples and their license headers reflect
+the provenance.</p>
+<p><code>cmp.sh</code> is the simple script used to compile the two Curl programs.</p>
+<p>Note that they're all pretty 'hacky' and I only provide them for the sake of transparency.
+Getting them working yourselves probably will require some tinkering.</p>
+<p>The parallel requests of 200 were used as this was the maximum parallel requests I could
+do on my machine without maxing out memory (8Gb).</p>
+<p>When ran, the <code>item</code> download took about 6 hrs and the <code>user</code> download took about 20 mins.</p>
+<p>Once the <code>item</code> and <code>user</code> information was downloaded, they were converted to tab-delimited
+CSVs using <code>jq</code> along with some <code>sed</code> magic to properly escape quotes.</p>
+<p><code>sql/load-db</code> shows the process of loading in the local files.</p>
+<h2 id="appendix-database-schema">Appendix: Database Schema</h2>
+<p>This models closely the <a href="https://github.com/HackerNews/API">HN API</a>.</p>
+<pre><code>create table users (
+  iid INTEGER PRIMARY KEY,
+  id varchar(255),
+  created INTEGER,
+  karma INTEGER
+);
+
+create index users_id_idx on users(id);
+create index users_created_idx on users(created);
+
+create table item (
+  id INTEGER PRIMARY KEY,
+  by varchar(255),
+  dead INTEGER,
+  deleted INTEGER,
+
+  parent INTEGER,
+  poll INTEGER,
+  descendants INTEGER,
+  score INTEGER,
+  text varchar(255),
+  time INTEGER,
+  title varchar(255),
+  type varchar(255),
+  url varchar(255)
+
+);
+
+create index item_by_idx on item(by);
+create index item_parent_idx on item(parent);
+create index item_time_idx on item(time);
+create index item_type_idx on item(type);
+create index item_time_type_idx on item(time,type);
+create index item_time_type_score_idx on item(time,type,score);
+
+</code></pre>
+
+<p>Note that the <code>iid</code> is a completely synthetic id that hasn't been provided by HN.</p>
+<h2 id="references">References</h2>
+<ul>
+<li><a href="https://greg.blog/2013/01/26/unix-bi-grams-tri-grams-and-topic-modeling/">greg.blog: UNIX, Bi-Grams, Tri-Grams, and Topic Modeling</a></li>
+<li><a href="http://mallet.cs.umass.edu/download.php">Mallet</a></li>
+<li><a href="http://mallet.cs.umass.edu/topics.php">Mallet: Topic Modeling</a></li>
+<li><a href="https://www.johndcook.com/blog/2015/11/24/estimating-the-exponent-of-discrete-power-law-data/">John D. Cook: Estimating the exponent of discrete power law data</a></li>
+<li><a href="https://github.com/HackerNews/API">Github: Hacker News API</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Zipf%27s_law">Wikipedia: Zipf's Law</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Power_law">Wikipedia: Power Law</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Stable_distribution">Wikipedia: Levy Stable Distribution</a></li>
+</ul>
+<h2 id="license">License</h2>
+<p>CC0</p>
+
+      </section>
+
+    </div>
+    <script src="/js/scale.fix.js"></script>
+  </body
+</html>

@@ -1,0 +1,300 @@
+#!/bin/bash
+#
+# License: CC0
+#
+
+PLOT_OVERVIEW=0
+PLOT_USERURL=0
+PLOT_USERFREQ=0
+PLOT_WORDCLOUD=0
+PLOT_COMMENTCLOUD=0
+PLOT_SENTIMENT=0
+
+PLOT_COMMENTTOD=0
+PLOT_COMMENTTOW=0
+
+datadir="../src/data/"
+db="../sql/hn.sqlite"
+d=".plotdata"
+
+mkdir -p "$d"
+
+imdir="../theme/img"
+
+mkdir -p $imdir
+
+###
+###
+
+if [[ "$PLOT_OVERVIEW" == 1 ]] ; then
+  echo ...
+  sqlite3 $db < <( echo -e '.separator "\t"\nselect count(id) freq, type from item where type != "" group by type order by freq desc;' ) > overview.txt
+  ./plot-overview overview.txt $imdir/overview.png
+
+  sqlite3 $db < <( echo -e '.separator "\t"\nselect count(id), type, substr(datetime(time, "unixepoch", "utc"), 0, 8) mo  from item group by mo, type order by mo, type asc;' ) > type-mo-ts.txt
+  ./plot-mo-type-time type-mo-ts.txt $imdir/type-mo-ts.png
+fi
+
+###
+###
+
+if [[ "$PLOT_USERURL" == 1 ]] ; then
+  sqlite3 $db < <( echo 'select about from users where about like "%https:%";' ) | \
+    sed 's/&#x2F;/\//g' | \
+    grep -o -P 'https?://[a-zA-Z0-9\.-]*' | \
+    sort | \
+    uniq -c | \
+    sort -rn > user.url
+  ./plot-user-about-url user.url $imdir/user-url.png
+fi
+
+if [[ "$PLOT_USERFREQ" == 1 ]] ; then
+
+  ## ~35min
+  ##
+  #sqlite3 $db < <( echo -e '.separator "\t"\nselect count(id) c,by from item where by != "" group by by order by c desc;'  ) > user_item_freq.txt
+  #cut -f1 user_item_freq.txt | \
+  #  sort -n | \
+  #  uniq -c | \
+  #  sed 's/^ *//' | \
+  #  sed 's/^\([^ ]*\) \(.*\)/\2 \1/' > user_item_freq.gp
+
+  ## ~10mins
+  ##
+  zcat $datadir/hn-item*.ajson.gz | \
+    jq -r -c '.by ' | \
+    grep -P -v '^$' | \
+    grep -P -v '^null$' | \
+    sort | \
+    uniq -c | \
+    sort -nr | \
+    sed 's/^ *//' > user_item_freq.gp
+  cut -f1 -d' ' user_item_freq.gp | \
+    sort | \
+    uniq -c | \
+    sort -nr | \
+    sed 's/^ *//'  | \
+    awk '{ print $2, $1; }' > user_item_freq_freq.gp
+  ./zipf-mle user_item_freq.gp > user_item-exponent-mle.txt
+  echo -e 'set term png\nset output "'$imdir'/user-item-freq.png"\nset logscale\nset xlabel "Item count"\nset ylabel "Frequency"\nplot [:] [0.5:] "user_item_freq_freq.gp" title "item"' | \
+    gnuplot
+
+  ocdf -i user_item_freq_freq.gp -R -r > user_item_freq_freq_n.gp
+  a=`cat user_item-exponent-mle.txt`
+  echo -e 'set term png\nset output "'$imdir'/user-item-freq_n.png"\nset xlabel "Item count"\nset ylabel "Frequency"\nset logscale\nplot [:] [0.0000001:] "user_item_freq_freq_n.gp" title "item", exp(-'$a'*log(x)) title "fit"' | \
+    gnuplot
+
+
+
+
+
+  zcat $datadir/hn-item*.ajson.gz | \
+    jq -r -c 'if .type == "comment" then .by else "" end' | \
+    grep -P -v '^$' | \
+    grep -P -v '^null$' | \
+    sort | \
+    uniq -c | \
+    sort -nr | \
+    sed 's/^ *//' > user_comment_freq.gp
+  cut -f1 -d' ' user_comment_freq.gp | \
+    sort | \
+    uniq -c | \
+    sort -nr | \
+    sed 's/^ *//'  | \
+    awk '{ print $2, $1; }' > user_comment_freq_freq.gp
+  ./zipf-mle user_comment_freq.gp > user_comment-exponent-mle.txt
+
+  zcat $datadir/hn-item*.ajson.gz | \
+    jq -r -c 'if .type == "story" then .by else "" end' | \
+    grep -P -v '^$' | \
+    grep -P -v '^null$' | \
+    sort | \
+    uniq -c | \
+    sort -nr | \
+    sed 's/^ *//' > user_story_freq.gp
+  cut -f1 -d' ' user_story_freq.gp | \
+    sort | \
+    uniq -c | \
+    sort -nr | \
+    sed 's/^ *//'  | \
+    awk '{ print $2, $1; }' > user_story_freq_freq.gp
+  ./zipf-mle user_story_freq.gp > user_story-exponent-mle.txt
+
+  echo -e 'set term png\nset output "'$imdir'/sc-freq.png"\nset xlabel "Item count"\nset ylabel "Frequency"\nset logscale\nplot [:] [0.5:] "user_story_freq_freq.gp" title "story", "user_comment_freq_freq.gp" title "comment"' | \
+    gnuplot
+
+  ocdf -i user_comment_freq_freq.gp -R -r > user_comment_freq_freq_n.gp
+  ocdf -i user_story_freq_freq.gp -R -r > user_story_freq_freq_n.gp
+
+  as=`cat user_story-exponent-mle.txt`
+  ac=`cat user_comment-exponent-mle.txt`
+  echo -e 'set term png\nset output "'$imdir'/sc-freq_n.png"\nset logscale\nplot [:] [0.000001:] "user_story_freq_freq_n.gp" title "story", exp(-'$as'*log(x)) title "story-fit", "user_comment_freq_freq_n.gp" title "comment", exp(-'$ac'*log(x)) title "comment-fit"' | \
+    gnuplot
+
+
+
+fi
+
+###
+###
+
+## trigram word clouds
+##
+if [[ "$PLOT_WORDCLOUD" == 1 ]]; then
+  wcscore=30
+
+  sqlite3 $db < <( echo "select title  from item where type = 'story' and score > $wcscore and score != '' and substr(datetime(time, 'unixepoch', 'utc'), 1,4) = '2019' and time >= 1546318800 order by id desc;" ) | \
+    ./trigrams | \
+    iconv -f utf-8 -t ascii//translit | \
+    tr ',-.:!'"'"'"' '_'  > 2019-filtered.trigrams
+  ./plot-wordcloud $imdir/2019-filtered.trigrams hn-2019-trigram.png
+
+  sqlite3 $db < <( echo "select title  from item where type = 'story' and score > $wcscore and score != '' and substr(datetime(time, 'unixepoch', 'utc'), 1,4) = '2020' and time >= 1577854800 order by id desc;" ) | \
+    ./trigrams | \
+    iconv -f utf-8 -t ascii//translit | \
+    tr ',-.:!'"'"'"' '_'  > 2020-filtered.trigrams
+  ./plot-wordcloud $imdir/2020-filtered.trigrams hn-2020-trigram.png
+fi
+
+###
+###
+
+if [[ "$PLOT_COMMENTCLOUD" == 1 ]]; then
+  sqlite3 $db < <( echo "select text from item where type = 'comment' and time >= 1546318800 and time <= 1609477200 order by id desc;" ) | \
+    ./trigrams | \
+    iconv -f utf-8 -t ascii//translit | \
+    tr ',-.:!'"'"'"' '_'  > 2020-filtered-comment.trigrams
+  ./plot-wordcloud 2019-filtered-comment.trigrams $imdir/hn-2019-comment-trigram.png
+
+fi
+
+###
+###
+
+if [[ "$PLOT_SENTIMENT" == 1 ]]; then
+  time echo 'select text from item where type = "comment" order by id desc limit 100000;' | \
+    sqlite3 ../hn.sqlite | \
+    ./sentiment > comment-sent.txt
+  grep -o ' {[^{}]*}$' comment-sent.txt | \
+    sed "s/'/\"/g" | \
+    jq .pos | \
+    sort -n | \
+    uniq -c | \
+    sort -nr | \
+    sed 's/^ *//' | \
+    tr '\t' ' ' | \
+    sed 's/^\([^ ]*\) \(.*\)/\2 \1/' > s-pos.gp
+
+  grep -o ' {[^{}]*}$' comment-sent.txt | \
+    sed "s/'/\"/g" | \
+    jq .neg | \
+    sort -n | \
+    uniq -c | \
+    sort -nr | \
+    sed 's/^ *//' | \
+    tr '\t' ' ' | \
+    sed 's/^\([^ ]*\) \(.*\)/\2 \1/' > s-neg.gp
+
+  grep -o ' {[^{}]*}$' comment-sent.txt | \
+    sed "s/'/\"/g" | \
+    jq .neu | \
+    sort -n | \
+    uniq -c | \
+    sort -nr | \
+    sed 's/^ *//' | \
+    tr '\t' ' ' | \
+    sed 's/^\([^ ]*\) \(.*\)/\2 \1/' > s-neu.gp
+
+  grep -o ' {[^{}]*}$' comment-sent.txt | \
+    sed "s/'/\"/g" | \
+    jq .compound | \
+    sort -n | \
+    uniq -c | \
+    sort -nr | \
+    sed 's/^ *//' | \
+    tr '\t' ' ' | \
+    sed 's/^\([^ ]*\) \(.*\)/\2 \1/' > s-com.gp
+
+  echo -e "set term png\nset output '"$imdir"/comment-sentiment.png'\nset xlabel 'Score'\nset ylabel 'Frequency'\nset logscale y\nplot 's-pos.gp' title 'pos', 's-neg.gp' title 'neg', 's-neu.gp' title 'neutral', 's-com.gp' title 'comound'" | \
+    gnuplot
+
+fi
+
+###
+###
+
+if [[ "$PLOT_COMMENTTOD" == 1 ]] ; then
+
+  # From Jan 1 2020
+  #
+  echo -e '.separator " "\nselect time, substr(datetime(time, "unixepoch", "utc"), 12, 5) t, type from item where time >= 1577854800 and time != "" ;' | \
+    sqlite3 $db > item-tod.raw
+
+  grep -P ' (comment|story)$' item-tod.raw | \
+    cut -f2 -d' ' | \
+    sort  | \
+    uniq -c | \
+    sed 's/^ *//' | \
+    tr ':' ' ' | \
+    awk '{ print $2 + $3/(60), $1; }' | \
+    sort -n > item-tod-unshifted.freq
+  echo -e 'set term png\nset output "'$imdir'/item-tod-unshifted.png"\nset xlabel "Time of Day (UTC)"\nset ylabel "Frequency"\nplot "item-tod-unshifted.freq" title "item"' | \
+    gnuplot
+
+  grep -P ' (comment|story)$' item-tod.raw | \
+    cut -f2 -d' ' | \
+    sort  | \
+    uniq -c | \
+    sed 's/^ *//' | \
+    tr ':' ' ' | \
+    awk '{ print ($2 < 10)? ($2+24 + $3/(60)) : ($2+$3/60), $1; }'  | \
+    sort -n > item-tod.freq
+  echo -e 'set term png\nset output "'$imdir'/item-tod.png"\n\nset xlabel "Time of Day (UTC)"\nset ylabel "Frequency"\nplot "item-tod.freq" title "item"' | \
+    gnuplot
+
+  grep -P ' comment$' item-tod.raw | \
+    cut -f2 -d' ' | \
+    sort  | \
+    uniq -c | \
+    sed 's/^ *//' | \
+    tr ':' ' ' | \
+    awk '{ print ($2 < 10)? ($2+24 + $3/(60)) : ($2+$3/60), $1; }'  | \
+    sort -n > comment-tod.freq
+
+  grep -P ' story$' item-tod.raw | \
+    cut -f2 -d' ' | \
+    sort  | \
+    uniq -c | \
+    sed 's/^ *//' | \
+    tr ':' ' ' | \
+    awk '{ print ($2 < 10)? ($2+24 + $3/(60)) : ($2+$3/60), $1; }'  | \
+    sort -n > story-tod.freq
+  echo -e 'set term png\nset output "'$imdir'/sc-tod.png"\nset y2tics\nset xlabel "Time of Day (UTC)"\nset ylabel "Frequency"\nplot "comment-tod.freq" title "comment", "story-tod.freq" title "story" axis x1y2' | \
+    gnuplot
+
+fi
+
+###
+###
+
+if [[ "$PLOT_COMMENTTOW" == 1 ]] ; then
+
+  # From Jan 1 2020
+  #
+  echo -e '.separator " "\nselect strftime("%w", datetime(time, "unixepoch", "utc")), substr(datetime(time, "unixepoch", "utc"), 12, 5), type from item where time > 1577854800 and time != "";' | \
+    sqlite3 $db > item-tow.raw
+
+
+  grep -P ' (comment|story)$' item-tow.raw | \
+    cut -f1,2 -d' ' | \
+    sort  | \
+    uniq -c | \
+    sed 's/^ *//' | \
+    tr ':' ' ' | \
+    awk '{ print $2 + ($3/24) + ($4/(24*60)), $1; }' | \
+    sort -n > item-tow.freq
+  echo -e 'set term png\nset output "'$imdir'/item-tow.png"\nset xlabel "Time of Week"\nset ylabel "Frequency"\nplot "item-tow.freq" title "item"' | \
+    gnuplot
+
+
+fi

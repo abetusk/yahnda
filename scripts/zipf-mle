@@ -1,0 +1,55 @@
+#!/usr/bin/python3
+#
+# 
+
+import re
+import sys
+from scipy import log
+from scipy.special import zeta
+from scipy.optimize import bisect 
+
+import numpy as np
+import numpy.random
+
+
+ifn=""
+if len(sys.argv) > 1:
+  ifn = sys.argv[1]
+
+if ifn=="":
+  print("provide input")
+  sys.exit(-1)
+
+
+_x = []
+with open(ifn, "r") as fp:
+  for line in fp:
+    line = line.strip()
+    if len(line) == 0: continue
+    #a = line.split("\t")
+    a = re.split('\t| ', line)
+    f = float(a[0])
+    _x.append(f)
+
+#alpha = 1.5
+#n = 5000
+#x = numpy.random.zipf(alpha, n)
+x = np.array(_x)
+
+#xmin = 1
+xmin = 1
+
+def log_zeta(x):
+  return log(zeta(x, 1))
+
+def log_deriv_zeta(x):
+  h = 1e-5
+  return (log_zeta(x+h) - log_zeta(x-h))/(2*h)
+
+t = -sum( log(x/xmin) )/float(len(x))
+def objective(x):
+  return log_deriv_zeta(x) - t
+
+a, b = 1.01, 10
+alpha_hat = bisect(objective, a, b, xtol=1e-6)
+print(alpha_hat)

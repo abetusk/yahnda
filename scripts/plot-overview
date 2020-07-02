@@ -1,0 +1,100 @@
+#!/usr/bin/python3
+
+import sys
+import matplotlib.pyplot as plt
+import numpy as np
+
+ifn = ""
+if len(sys.argv) > 1:
+  ifn = sys.argv[1]
+
+ofn=""
+if len(sys.argv) > 2:
+  ofn = sys.argv[2]
+
+if ifn == "":
+  print("provide input file")
+  sys.exit(-1)
+
+vals=[]
+labels=[]
+with open(ifn, "r") as fp:
+  for line in fp:
+    l = line.strip()
+    if len(l)==0: continue
+    a = l.split("\t")
+    if len(a)!=2: continue
+    f = float(a[0])
+    v = a[1]
+    vals.append(f)
+    labels.append(v + "\n(" + str(int(f)) + ")")
+
+
+plt.rcdefaults()
+fig, ax = plt.subplots()
+
+fig.subplots_adjust(left=0.15)
+
+y_pos = np.arange(len(labels))
+
+ax.barh(y_pos, vals, align='center')
+ax.set_yticks(y_pos)
+ax.set_yticklabels(labels)
+ax.invert_yaxis()  # labels read top-to-bottom
+ax.set_xlabel('Frequency (log-scale)')
+ax.set_title('Submission Type')
+ax.set_xscale("log")
+
+ax.set_ylim(len(labels),-1)
+
+if ofn == "":
+  plt.show()
+else:
+  plt.savefig(ofn)
+
+
+sys.exit(0)
+######
+######
+######
+
+
+np_vals = np.array(vals)
+np_labels = np.array(labels)
+
+
+fig, ax = plt.subplots()
+c = ['#212436','#4458a0','#bd098e','#cd2d48','#f1c40f']
+size = 0.3
+#vals = np.array([[60., 32.], [37., 40.], [29., 10.]])
+
+print(np_vals)
+
+#wedges,texts = ax.pie(np_vals, radius=1, colors=c, labels=np_labels, wedgeprops=dict(width=size, edgecolor='w'))
+wedges,texts = ax.pie(np_vals, radius=1, colors=c, wedgeprops=dict(width=size, edgecolor='w'))
+
+bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
+kw = dict(arrowprops=dict(arrowstyle="-"), bbox=bbox_props, zorder=0, va="center")
+
+for i,p in enumerate(wedges):
+    ang = (p.theta2 - p.theta1)/2. + p.theta1
+    y = np.sin(np.deg2rad(ang))
+    x = np.cos(np.deg2rad(ang))
+    horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))]
+    connectionstyle = "angle,angleA=0,angleB={}".format(ang)
+    kw["arrowprops"].update({"connectionstyle": connectionstyle})
+    ax.annotate(labels[i], xy=(x, y), xytext=(1.35*np.sign(x), 1.4*y),
+                horizontalalignment=horizontalalignment, **kw)
+
+
+
+#ax.pie(vals.flatten(), radius=1-size, colors=c,
+#       wedgeprops=dict(width=size, edgecolor='w'))
+
+ax.set(aspect="equal", title='Pie plot with `ax.pie`')
+
+if ofn == "":
+  plt.show()
+else:
+  plt.savefig(ofn)
+
