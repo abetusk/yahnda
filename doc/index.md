@@ -6,6 +6,13 @@ Yet Another Hacker News Data Analysis
 Introduction
 ---
 
+Here I will do some basic analysis of the data provided by 
+Y-Combinator's social news site, [Hacker News](https://news.ycombinator.com/) (HN).
+The analysis presented here is a light hearted meandering through different
+aspects of the HN site data.
+I've favored an approach that leaves the data interpretation up to the reader
+and kept my own interpretation to a minimum.
+
 Doing a search for a snapshot of the HN API data provided some options but nothing
 recent and nothing with user information also present, at least, not that I could find.
 I decided to scrape what was available from the HN data through their very
@@ -24,8 +31,6 @@ or take down the data as I'm providing it in the hacker friendly spirit of
 data sharing and transparency.
 
 There's nothing novel here, aside, maybe, from an easily downloadable database.
-The analysis presented here is a light hearted meandering through different
-aspects of the HN site data.
 
 That being said, I imagine a lot of people thinking "so what?" and I'd be hard pressed
 to argue with them.
