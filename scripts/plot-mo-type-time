@@ -1,0 +1,80 @@
+#!/usr/bin/python3 
+
+import sys
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+import matplotlib.ticker as ticker
+
+ifn=""
+if len(sys.argv) > 1:
+  ifn = sys.argv[1]
+if ifn=="":
+  print("provide input file")
+  sys.exit(-1)
+
+ofn = ""
+if len(sys.argv) > 2:
+  ofn = sys.argv[2]
+
+x_mo = []
+y_val = []
+type_freq = {
+  "job" : [],
+  "poll" :[],
+  "pollopt":[],
+  "comment":[],
+  "story":[]
+}
+
+with open(ifn, "r") as fp:
+  prev_mo = ""
+  for line in fp:
+    line = line.strip()
+    if len(line)==0: continue
+    a = line.split("\t")
+    if len(a)!=3: continue
+    if a[2] == "": continue
+
+    f = int(a[0])
+    t = a[1]
+    mo = a[2]
+
+    if mo != prev_mo:
+      x_mo.append(mo)
+      type_freq["job"].append(0)
+      type_freq["poll"].append(0)
+      type_freq["pollopt"].append(0)
+      type_freq["comment"].append(0)
+      type_freq["story"].append(0)
+      prev_mo = mo
+
+    type_freq[t][ len(type_freq[t])-1 ] = f
+
+
+np_x = np.array(x_mo).astype('O')
+
+def dt_fmt(x,pos=None):
+  thisind = np.clip(int(x+0.5), 0, len(x_mo)-1)
+  return x_mo[thisind]
+
+ind = np.arange(len(np_x))
+
+fig, ax = plt.subplots(1,1)
+ax.xaxis.set_major_formatter(ticker.FuncFormatter(dt_fmt))
+ax.plot(ind, type_freq["comment"],
+        ind, type_freq["story"],
+        ind, type_freq["job"],
+        ind, type_freq["poll"],
+        ind, type_freq["pollopt"])
+ax.legend(["comment","story","job","poll","pollopt"], loc='upper left', fontsize='small')
+fig.autofmt_xdate()
+plt.xlim([-30,len(x_mo)+10])
+plt.yscale("log")
+
+if ofn=="":
+  plt.show()
+else:
+  plt.savefig(ofn)
+

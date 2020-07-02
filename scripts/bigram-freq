@@ -1,0 +1,16 @@
+#!/bin/bash
+
+infn="$1"
+
+if [[ "$infn" == "" ]] ; then
+  infn=/dev/stdin
+fi
+
+tmp0=`mktemp`
+tmp1=`mktemp`
+
+cat $infn | tr '[:upper:]' '[:lower:]' | tr -d '[:punct:]' | sed 's/,//' | sed G | tr ' ' '\n' > $tmp0
+tail -n+2 $tmp0 > $tmp1
+paste -d ',' $tmp0 $tmp1 | grep -v -e "^," | grep -v -e ",$" | sort | uniq -c | sort -rn
+
+rm -f $tmp0 $tmp1

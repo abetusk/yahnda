@@ -1,0 +1,56 @@
+#!/usr/bin/python3
+
+import sys
+import matplotlib.pyplot as plt
+import numpy as np
+
+ifn = ""
+if len(sys.argv) > 1:
+  ifn=sys.argv[1]
+else:
+  print("provide input")
+
+ofn = ""
+if len(sys.argv) > 2:
+  ofn = sys.argv[2]
+
+MAX_ITEM = 30
+
+freqs = []
+urls = []
+with open("user.url", "r") as fp:
+  c = 0
+  for line in fp:
+    l = line.strip()
+    a = l.split(" ")
+    if len(a)!=2: continue
+    freqs.append( int(a[0]) )
+    urls.append( a[1] )
+    c+=1
+    if c>=MAX_ITEM: break
+
+
+np_freqs = np.array(freqs)
+np_url = np.array(urls)
+
+plt.rcdefaults()
+fig, ax = plt.subplots()
+
+fig.subplots_adjust(left=0.45)
+
+y_pos = np.arange(len(np_url))
+
+ax.barh(y_pos, np_freqs, align='center')
+ax.set_yticks(y_pos)
+ax.set_yticklabels(np_url)
+ax.invert_yaxis()  # labels read top-to-bottom
+ax.set_xlabel('Frequency')
+ax.set_title('Most frequent URLs in "about" user field')
+ax.set_xscale("log")
+
+ax.set_ylim(len(np_url),-1)
+
+if ofn=="":
+  plt.show()
+else:
+  plt.savefig(ofn)

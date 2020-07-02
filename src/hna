@@ -1,0 +1,95 @@
+#!/bin/bash
+#
+# License: CC0
+#
+
+userurl='https://hacker-news.firebaseio.com/v0/user/'
+itemurl='https://hacker-news.firebaseio.com/v0/item/'
+
+burl='https://hacker-news.firebaseio.com/v0/'
+
+#sfx='?print=pretty'
+sfx=''
+
+param="$1"
+p2="$2"
+
+if [[ "$param" == "" ]] ; then
+  echo ""
+  echo "hacker news api"
+  echo ""
+  echo "  <itemid>        retrieve item (item/<itemid> call)"
+  echo "  i/<itemid>      retrieve item (item/<itemid> call)"
+  echo "  item <itemid>   retrieve item (item/<itemid> call)"
+  echo "  u/<userid>      retrieve user (user/<userid> call)"
+  echo "  u/<userid>      retrieve user (user/<userid> call)"
+  echo "  user <userid>   retrieve user (user/<userid> call)"
+  echo "  maxitem         get max item (maxitem call)"
+  echo ""
+  exit 1
+fi
+
+action=""
+id=""
+
+if [[ "$p2" != "" ]] ; then
+
+  if [[ "$param" == "i" ]] || [[ "$param" == "item" ]] ; then
+    action="item"
+    id="$p2"
+  elif [[ "$param" == "u" ]] || [[ "$param" == "user" ]] ; then
+    action="user"
+    id="$p2"
+  elif [[ "$param" == "m" ]] || [[ "$param" == "maxitem" ]] ; then
+    action="maxitem"
+  else
+    action=""
+  fi
+else
+  p0=`echo "$param/" | cut -f1 -d'/'`
+  p1=`echo "$param/" | cut -f2 -d'/'`
+
+  if [[ "$p1" == "" ]] ; then
+
+    if [[ "$p0" == "maxitem" ]] ; then
+      action="maxitem"
+    else
+      action="item"
+      id="$p0"
+    fi
+  else
+    if [[ "$p0" == "i" ]] || [[ "$p0" == "item" ]] ; then
+      action="item"
+      id="$p1"
+    elif [[ "$p0" == "u" ]] || [[ "$p0" == "user" ]] ; then
+      action="user"
+      id="$p1"
+    elif [[ "$p0" == "m" ]] || [[ "$p0" == "maxitem" ]] ; then
+      action="maxitem"
+    else
+      action=""
+    fi
+  fi
+fi
+
+if [[ "$action" == "" ]] ; then
+  echo "invalid action"
+  exit 2
+fi
+
+if [[ "$action" == "maxitem" ]] ; then
+  url="$burl"/maxitem.json
+  curl -s "$url"
+  echo ""
+
+  exit 0
+fi
+
+if [[ "$id" == "" ]] ; then
+  echo "id ??"
+  exit 3
+fi
+
+url="$burl"/"$action"/"$id"".json""$sfx"
+curl -s "$url"
+

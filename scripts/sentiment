@@ -1,0 +1,11 @@
+#!/usr/bin/python3
+import sys
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+sentences = []
+for line in sys.stdin:
+  line = line.strip()
+  sentences.append(line)
+analyzer = SentimentIntensityAnalyzer()
+for sentence in sentences:
+  vs = analyzer.polarity_scores(sentence)
+  print("{:-<1000} {}".format(sentence, str(vs)))

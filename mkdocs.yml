@@ -1,0 +1,9 @@
+site_name: yahnda
+pages:
+  - index.md
+
+docs_dir: 'doc'
+theme_dir: 'theme'
+extra:
+  base : "/"
+

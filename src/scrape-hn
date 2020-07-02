@@ -1,0 +1,28 @@
+#!/bin/bash
+#
+# License: CC0
+#
+
+mkdir -p data
+mkdir -p processed
+
+s=1
+N=23669527
+dn=100000
+
+for s in `seq $s $dn $N` ; do
+  en=`echo "$s + $dn" | bc `
+  if [[ "$en" -gt "$N" ]] ; then
+    dn=` echo "$N - $s" | bc`
+  fi
+
+  if [[ -e "processed/s${s}_${dn}.processed" ]] ; then
+    echo "## skipping $s $dn"
+    continue
+  fi
+
+  echo "## $s $dn"
+
+  time ./hnai $s $dn 2>> log.err | gzip -c  > data/hn-item_s${s}_${dn}.ajson.gz
+  echo done > processed/s${s}_${dn}.processed
+done
