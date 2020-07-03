@@ -3,6 +3,8 @@ Yet Another Hacker News Data Analysis
 
 ![preview](img/preview.png)
 
+###### 2020-07-02
+
 Introduction
 ---
 
