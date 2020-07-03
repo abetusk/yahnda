@@ -54,3 +54,4 @@ dkms.conf
 data
 src/data
 sql
+*~
