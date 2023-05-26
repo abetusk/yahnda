@@ -70,7 +70,7 @@
       <section>
 
         <h1 id="yet-another-hacker-news-data-analysis">Yet Another Hacker News Data Analysis</h1>
-<p><img alt="preview" src="./img/preview.png" /></p>
+<p><img alt="preview" src="img/preview.png" /></p>
 <h6 id="2020-07-02">2020-07-02</h6>
 <h2 id="introduction">Introduction</h2>
 <p>Here I will do some basic analysis of the data provided by 
@@ -94,9 +94,6 @@ I am, no doubt, violating their terms of use so I'm hoping they won't sue me
 or take down the data as I'm providing it in the hacker friendly spirit of
 data sharing and transparency.</p>
 <p>There's nothing novel here, aside, maybe, from an easily downloadable database.</p>
-<p>That being said, I imagine a lot of people thinking "so what?" and I'd be hard pressed
-to argue with them.</p>
-<p>So what? So what! Why not! Let's take a look at Hacker News data!</p>
 <h2 id="analysis">Analysis</h2>
 <h3 id="overview">Overview</h3>
 <p>First let's get an overview of the data:</p>
@@ -105,7 +102,6 @@ to argue with them.</p>
 sqlite&gt; select count(*) from item;
 23669105
 </code></pre>
-
 <p>A breakdown of different types of item data:</p>
 <pre><code>sqlite&gt; select count(id), type from item group by type ;
 count(id)|type
@@ -115,8 +111,7 @@ count(id)|type
 12164|pollopt
 3759216|story
 </code></pre>
-
-<p><img alt="submission type" src="./img/overview.png" /></p>
+<p><img alt="submission type" src="img/overview.png" /></p>
 <p>Please note the frequency log-scale.</p>
 <hr />
 <p>Different item data, grouped by month, through time:</p>
@@ -136,8 +131,53 @@ count(id)|type
 71|job|2020-06
 34168|story|2020-06
 </code></pre>
-
-<p><img alt="type vs time" src="./img/type-mo-ts.png" /></p>
+<p><img alt="type vs time" src="img/type-mo-ts.png" /></p>
+<h4 id="user-karma-frequency">User Karma Frequency</h4>
+<p>We can plot the distribution of Karma values each user has.</p>
+<pre><code>sqlite&gt; .separator &quot; &quot;
+sqlite&gt; select karma, count(karma) from users where karma &gt; 0 and karma != &quot;&quot; and karma is not null group by karma order by karma asc;
+1 243755
+2 57303
+3 27637
+4 17327
+5 12747
+6 9758
+7 7870
+8 6572
+9 5649
+10 4671
+11 4159
+...
+90704 1
+91896 1
+97198 1
+99590 1
+123737 1
+125533 1
+127904 1
+156181 1
+163953 1
+</code></pre>
+<p>As of the data scrape, 24755 users have 1 karma, 57303 users have 2 karma, etc. on one end
+and there is only one user with 163953 karma, another single user with 156181 karma, etc.</p>
+<p>We can see who some of those top karma users are:</p>
+<pre><code>sqlite&gt; select id, karma  from users where karma &gt; 90704 and karma != '' and karma is not null order by karma asc;
+rbanffy|91896
+rayiner|97198
+ColinWright|99590
+ingve|123737
+patio11|125533
+danso|127904
+pg|156181
+jacquesm|163953
+</code></pre>
+<p>Unsurprisingly to folks who frequent HN, we see <code>pg</code> and <code>patio11</code> among the top.</p>
+<p>We can see the overall distribution of the frequency of karma users have on a log-log plot:</p>
+<p><img alt="karma frequency" src="img/user-karma.png" /></p>
+<p>Thanks to <a href="https://www.johndcook.com/blog/2015/11/24/estimating-the-exponent-of-discrete-power-law-data/">John D. Cook</a> we can copy-pasta
+the maximum likelihood estimator (MLE) code to give us a value of 1.118 for the exponent for the power law.</p>
+<p>As <a href="https://en.wikipedia.org/wiki/Stable_distribution">a sanity check</a>, the exponent is in the range of <code>(1,3)</code>, which is expected
+for fat-tailed distributions.</p>
 <h4 id="user-item-frequency">User Item Frequency</h4>
 <p>How about the frequency of user item creating (polls, comments, stories, etc.), making sure to filter out blank <code>by</code> fields:</p>
 <pre><code>sqlite&gt; select count(id) c, by from item where by != '' group by by order by c desc;
@@ -154,7 +194,6 @@ c|by
 22665|icebraining
 ...
 </code></pre>
-
 <p>Either because my SQL knowledge is substandard or I don't know what I'm doing with the indexes, I found queries took too long in SQL.
 Parsing the JSON directly yields faster results for me.</p>
 <p>After some data munging, we get: </p>
@@ -174,22 +213,20 @@ cut -f1 -d' ' user_item_freq.gp | \
   awk '{ print $2, $1; }' &gt; user_item_freq_freq.gp
 ./zipf-mle user_item_freq.gp &gt; user_item-exponent-mle.txt
 </code></pre>
-
 <p>Looking at a log-log plot of the graph:</p>
-<p><img alt="user item frequency" src="./img/user-item-freq.png" /></p>
+<p><img alt="user item frequency" src="img/user-item-freq.png" /></p>
 <p>Ah! The tell-tale sign of a power law distribution.</p>
 <p>Here it is broken out by <code>story</code> and <code>comment</code> items:</p>
-<p><img alt="user story/comment frequency" src="./img/sc-freq.png" /></p>
+<p><img alt="user story/comment frequency" src="img/sc-freq.png" /></p>
 <p>The y-axis being the number of users which have that frequency of item creation and the x-axis is the number of
 items created.
 For example, you can see <code>tptacek</code> far out on the right, being the only user to have 51639 items created, whereas
 users that only have 1 comment, say, are much more frequent.
 For context, I'm at 224 item creation (comments and stories combined) and fall in the middle.</p>
-<p>Thanks to <a href="https://www.johndcook.com/blog/2015/11/24/estimating-the-exponent-of-discrete-power-law-data/">John D. Cook</a> we can copy-pasta
-the maximum likelihood estimator (MLE) code to give us a value of 1.58 for the exponent for all items, 1.54 for comments and 1.77 for stories.
-As <a href="https://en.wikipedia.org/wiki/Stable_distribution">a sanity check</a>, they all fall in the range of <code>(1,3)</code>, which is expected
+<p>Again thanks to <a href="https://www.johndcook.com/blog/2015/11/24/estimating-the-exponent-of-discrete-power-law-data/">John D. Cook</a> we can copy-pasta
+the maximum likelihood estimator (MLE) code as above to give us a value of 1.58 for the exponent for all items, 1.54 for comments and 1.77 for stories.
+Again, as <a href="https://en.wikipedia.org/wiki/Stable_distribution">a sanity check</a>, they all fall in the range of <code>(1,3)</code>, which is expected
 for fat-tailed distributions.</p>
-<p>What does it mean? I dunno <code>-\_(:|)_/-</code></p>
 <h4 id="user-urls">User URLs</h4>
 <p>Let's take a look at the common URLs in the <code>about</code> field from the users on HN.
 Getting URLs from the <code>about</code> field in the <code>users</code> table is difficult to do in vanilla SQLite3 syntax, so excuse
@@ -201,8 +238,7 @@ the bash incantation:</p>
   uniq -c | \
   sort -rn 
 </code></pre>
-
-<p><img alt="User URLs" src="./img/user-url.png" /></p>
+<p><img alt="User URLs" src="img/user-url.png" /></p>
 <p>Please note the log-scale of frequency.</p>
 <p>One thing that jumps out is the prevalence of <code>keybase.io</code>.
 I can only assume that Y-Combinator has some close relationship to <code>keybase.io</code>, maybe going to far as
@@ -222,8 +258,7 @@ So we're not deluged by extraneous data, let's just take data from Jan 1st 2020 
   awk '{ print ($1 &lt; 10)? ($1+24 + $2/(60)) : ($1+$2/60), $3; }' | \
   sort -n 
 </code></pre>
-
-<p><img alt="UTC Time of Day Item" src="./img/item-tod-unshifted.png" /></p>
+<p><img alt="UTC Time of Day Item" src="img/item-tod-unshifted.png" /></p>
 <p>Whoa! Seems like a pretty clear signal.</p>
 <p>Let's shift so we see the trend with a bit more clarity:</p>
 <pre><code>echo 'select substr(datetime(time, &quot;unixepoch&quot;, &quot;utc&quot;), 12, 5) t from item where time &gt;= 1577854800 and time != &quot;&quot; ;' | \
@@ -232,12 +267,11 @@ So we're not deluged by extraneous data, let's just take data from Jan 1st 2020 
   awk '{ print ($1 &lt; 10)? ($1+24 + $2/(60)) : ($1+$2/60), $3; }' | \
   sort -n 
 </code></pre>
-
-<p><img alt="UTC Time of Day Item shifted" src="./img/item-tod.png" /></p>
+<p><img alt="UTC Time of Day Item shifted" src="img/item-tod.png" /></p>
 <p>16:00 UTC is 09:00 AM PT, so I would guess HN is pretty (US) west coast centric with the majority of activity happening
 at the start of the business day.</p>
 <p>I wouldn't guess any big surprises, but let's split it out by stories and comments:</p>
-<p><img alt="UTC story and comment ToD" src="./img/sc-tod.png" /></p>
+<p><img alt="UTC story and comment ToD" src="img/sc-tod.png" /></p>
 <p>Note that the story submissions are much less prevalent than comments and are plotted with different Y axies.</p>
 <p>It should be obvious but I only realized this in retrospect from looking at the data that comments have a lag
 behind stories, for probably obvious reasons.</p>
@@ -254,8 +288,7 @@ grep -P ' (comment|story)$' item-tow.raw | \
   awk '{ print $2 + ($3/24) + ($4/(24*60)), $1; }' | \
   sort -n
 </code></pre>
-
-<p><img alt="item time of week" src="./img/item-tow.png" /></p>
+<p><img alt="item time of week" src="img/item-tow.png" /></p>
 <p>Again, no big surprises.</p>
 <p>Here, 0 is Sunday and 6 is Saturday (the results of using <code>%w</code> in <code>strftime</code>) and times are in UTC properly rescaled.</p>
 <p>I would guess most people interact with HN during the weekday and peter off on the weekends, with Sunday being the least active day.</p>
@@ -272,11 +305,10 @@ sqlite3 hn.sqlite &lt; &lt;( echo &quot;select title  from item where type = 'st
   tr ',-.:!'&quot;'&quot;'&quot;' '_'  &gt; 2020-filtered.trigrams
 ./plot-wordcloud 2020-filtered.trigrams hn-2020-trigram.png
 </code></pre>
-
 <p>2019:</p>
-<p><img alt="HN 2019 Trigrams" src="./img/hn-2019-trigram.png" /> </p>
+<p><img alt="HN 2019 Trigrams" src="img/hn-2019-trigram.png" /> </p>
 <p>2020 (so far):</p>
-<p><img alt="HN 2020 Trigrams" src="./img/hn-2020-trigram.png" /></p>
+<p><img alt="HN 2020 Trigrams" src="img/hn-2020-trigram.png" /></p>
 <p>Please excuse the underscores I'm being lazy and constructing "single" words by concatenating three words together
 to fool <a href="https://github.com/amueller/word_cloud/">amueller/word_cloud</a> into constructing the word cloud.</p>
 <p>Note that these are for stories that have a score of more than 30.
@@ -313,7 +345,6 @@ bin/mallet train-topics \
   --topic-word-weights-file data.topic-word-weights.out
 cut -f2- data.topic-keys.out | sort -rn | head -n10
 </code></pre>
-
 <pre><code>0.06478 library rust javascript python compiler released fast code webassembly part css modern simple small scratch faster framework video written built 
 0.06366 work remote people job company employees working workers home hard don’t companies don't culture jobs staff teams hour find made 
 0.06013 data users personal tracking science location access phone user private breach facebook customers information passwords records app web collection selling 
@@ -326,7 +357,6 @@ cut -f2- data.topic-keys.out | sort -rn | head -n10
 0.04617 coronavirus covid u.s pandemic global fight virus due testing tests response state point lockdown spread test positive emergency reduce set 
 ...
 </code></pre>
-
 <p>Rust/Javascript/Python/WebAssembly Library/Framework/Compiler?
 Remote work/home workers?
 Personal data tracking/private phone breach/customer selling breach?</p>
@@ -338,7 +368,6 @@ we can run <a href="https://github.com/cjhutto/vaderSentiment">vaderSentiment</a
   sqlite3 hn.sqlite | \
   ./sentiment 
 </code></pre>
-
 <p>Where the program, <code>sentiment</code>, is copy-pasta'd from one of the examples from <code>vaderSentiment</code>:</p>
 <pre><code>#!/usr/bin/python3
 import sys
@@ -352,9 +381,8 @@ for sentence in sentences:
   vs = analyzer.polarity_scores(sentence)
   print(&quot;{:-&lt;1000} {}&quot;.format(sentence, str(vs)))
 </code></pre>
-
 <p>Here's a semi-log plot of the sentiments for the last 10k comments (as of the time of scraping) split out by positive, negative, neutral and "compound":</p>
-<p><img alt="vader sentiment for comments" src="./img/comment-sentiment.png" /></p>
+<p><img alt="vader sentiment for comments" src="img/comment-sentiment.png" /></p>
 <p>From the <code>vaderSentiment</code> page:</p>
 <blockquote>
 <p>The compound score is computed ... then normalized to be between -1 (most extreme negative) and +1 (most extreme positive).
@@ -367,7 +395,6 @@ Specifically, we'll run the topic modelling from above on 15 topics:</p>
 <pre><code>sqlite3 hn.sqlite &lt; &lt;( echo 'select type,text from item where by = &quot;patio11&quot; and type = &quot;comment&quot;  ;' ) &gt; patio11.comment
 
 </code></pre>
-
 <pre><code>0.60089 time day don't work i'm email years back call days business hours you're make week minutes i've phone put customer 
 0.59597 people don't you're make good things money lot they're business problem time folks isn't making stuff i'm world problems makes 
 0.41363 software business money customers pay month sales price sell people cost buy product costs businesses customer year make selling paying 
@@ -384,7 +411,6 @@ Specifically, we'll run the topic modelling from above on 15 topics:</p>
 0.08531 bitcoin million company market money stock transaction investors investment shares dollars fund worth funds billion exchange invest returns transactions founders 
 0.04306 nofollow rel href f;&amp;#x https:&amp;#x http:&amp;#x http://news.ycombinator.com/item?id http://www.kalzumeus.com f;item?id f;news.ycombinator.com&amp;#x f;stripe.com&amp;#x http://images html version pdf gur post read years comment 
 </code></pre>
-
 <p>From a blog post by <a href="https://danluu.com/hn-comments/">luu</a>, we know that <code>patio11</code> is focused on business related comments.
 From the word salad above, I would guess <code>patio11</code> is also interested 
 in Japanese culture, some legal issues, maybe some Bitcoin related issues, Bingo, etc.
@@ -398,7 +424,6 @@ From <code>patio11</code>'s profile, we see some related Internet, Stripe and Bi
 0.04972 code pre people time poverty energy the\n ppivnwy?t f;o phi(q we’re population talking order growth pinker function repeated copyright real 
 0.03197 distribution power random distributions law laws f;stable_distribution variance finite variables limiting rng sum normal number gaussian independent distributed tails find 
 </code></pre>
-
 <p>Free/libre software? Power law random distributions?
 Sure, sort of sounds like me.</p>
 <h2 id="conclusion">Conclusion</h2>
@@ -418,7 +443,6 @@ tail -n+2 $tmp0 &gt; $tmp1
 paste -d ',' $tmp0 $tmp1 | grep -v -e &quot;^,&quot; | grep -v -e &quot;,$&quot; | sort | uniq -c | sort -rn
 rm -f $tmp0 $tmp1
 </code></pre>
-
 <p>and <code>trigram-freq</code>:</p>
 <pre><code>nfn=&quot;$1&quot;
 if [[ &quot;$infn&quot; == &quot;&quot; ]] ; then infn=/dev/stdin ; fi
@@ -437,7 +461,6 @@ paste -d ',' $tmp0 $tmp1 $tmp2 | \
   sort -rn
 rm -f $tmp0 $tmp1 $tmp2
 </code></pre>
-
 <p>MLE for <a href="https://en.wikipedia.org/wiki/Zipf%27s_law">Zipf distributions</a> (aka <a href="https://en.wikipedia.org/wiki/Power_law">power law</a> tailed distributions)
  (coutesy of <a href="https://www.johndcook.com/blog/2015/11/24/estimating-the-exponent-of-discrete-power-law-data/">John D. Cook</a>):</p>
 <pre><code>#!/usr/bin/python3
@@ -496,7 +519,6 @@ alpha_hat = bisect(objective, a, b, xtol=1e-6)
 print(alpha_hat)
 
 </code></pre>
-
 <h2 id="appendix-data-retrieval">Appendix: Data Retrieval</h2>
 <p>A combination of C programs and shell scripts were used to scrape the Hacker News (HN) API.
 The following C programs were used:</p>
@@ -555,7 +577,6 @@ create index item_time_type_idx on item(time,type);
 create index item_time_type_score_idx on item(time,type,score);
 
 </code></pre>
-
 <p>Note that the <code>iid</code> is a completely synthetic id that hasn't been provided by HN.</p>
 <h2 id="references">References</h2>
 <ul>
@@ -570,7 +591,7 @@ create index item_time_type_score_idx on item(time,type,score);
 </ul>
 <h2 id="license">License</h2>
 <p>CC0</p>
-<p><img alt="cc0" src="./img/cc0-s.png" /></p>
+<p><img alt="cc0" src="img/cc0-s.png" /></p>
 
       </section>
 

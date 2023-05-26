@@ -4,7 +4,8 @@
 
 import re
 import sys
-from scipy import log
+#from scipy import log
+from numpy.lib.scimath import log
 from scipy.special import zeta
 from scipy.optimize import bisect 
 
