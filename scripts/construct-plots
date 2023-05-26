@@ -6,6 +6,7 @@
 PLOT_OVERVIEW=0
 PLOT_USERURL=0
 PLOT_USERFREQ=0
+PLOT_USERKARMA=1
 PLOT_WORDCLOUD=0
 PLOT_COMMENTCLOUD=0
 PLOT_SENTIMENT=0
@@ -46,6 +47,12 @@ if [[ "$PLOT_USERURL" == 1 ]] ; then
     uniq -c | \
     sort -rn > user.url
   ./plot-user-about-url user.url $imdir/user-url.png
+fi
+
+if [[ "$PLOT_USERKARMA" == 1 ]] ; then
+  sqlite3 $db < <( echo -e '.separator " "\nselect karma, count(karma) from users where karma > 0 and karma != "" and karma is not null group by karma order by karma asc;' ) > user_karma.gp
+  echo -e 'set term png\nset output "'$imdir'/user-karma.png"\nset xlabel "karma"\nset ylabel "Frequency of Karma Value"\nset logscale\nplot "user_karma.gp" title "Freq. Karma Value"' | \
+    gnuplot
 fi
 
 if [[ "$PLOT_USERFREQ" == 1 ]] ; then

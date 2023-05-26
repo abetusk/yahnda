@@ -1,9 +1,12 @@
 site_name: yahnda
-pages:
+nav:
   - index.md
 
 docs_dir: 'doc'
-theme_dir: 'theme'
+use_directory_urls: false
+theme:
+  name: mkdocs
+  custom_dir: 'theme'
 extra:
   base : "/"
 

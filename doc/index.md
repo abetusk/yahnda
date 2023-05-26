@@ -34,11 +34,6 @@ data sharing and transparency.
 
 There's nothing novel here, aside, maybe, from an easily downloadable database.
 
-That being said, I imagine a lot of people thinking "so what?" and I'd be hard pressed
-to argue with them.
-
-So what? So what! Why not! Let's take a look at Hacker News data!
-
 Analysis
 ---
 
@@ -92,6 +87,66 @@ sqlite> select count(id), type, substr(datetime(time, 'unixepoch', 'localtime'),
 ```
 
 ![type vs time](img/type-mo-ts.png)
+
+#### User Karma Frequency
+
+We can plot the distribution of Karma values each user has.
+
+```
+sqlite> .separator " "
+sqlite> select karma, count(karma) from users where karma > 0 and karma != "" and karma is not null group by karma order by karma asc;
+1 243755
+2 57303
+3 27637
+4 17327
+5 12747
+6 9758
+7 7870
+8 6572
+9 5649
+10 4671
+11 4159
+...
+90704 1
+91896 1
+97198 1
+99590 1
+123737 1
+125533 1
+127904 1
+156181 1
+163953 1
+```
+
+As of the data scrape, 24755 users have 1 karma, 57303 users have 2 karma, etc. on one end
+and there is only one user with 163953 karma, another single user with 156181 karma, etc.
+
+We can see who some of those top karma users are:
+
+```
+sqlite> select id, karma  from users where karma > 90704 and karma != '' and karma is not null order by karma asc;
+rbanffy|91896
+rayiner|97198
+ColinWright|99590
+ingve|123737
+patio11|125533
+danso|127904
+pg|156181
+jacquesm|163953
+```
+
+Unsurprisingly to folks who frequent HN, we see `pg` and `patio11` among the top.
+
+We can see the overall distribution of the frequency of karma users have on a log-log plot:
+
+![karma frequency](img/user-karma.png)
+
+Thanks to [John D. Cook](https://www.johndcook.com/blog/2015/11/24/estimating-the-exponent-of-discrete-power-law-data/) we can copy-pasta
+the maximum likelihood estimator (MLE) code to give us a value of 1.118 for the exponent for the power law.
+
+As [a sanity check](https://en.wikipedia.org/wiki/Stable_distribution), the exponent is in the range of `(1,3)`, which is expected
+for fat-tailed distributions.
+
 
 
 #### User Item Frequency
@@ -153,12 +208,10 @@ For example, you can see `tptacek` far out on the right, being the only user to 
 users that only have 1 comment, say, are much more frequent.
 For context, I'm at 224 item creation (comments and stories combined) and fall in the middle.
 
-Thanks to [John D. Cook](https://www.johndcook.com/blog/2015/11/24/estimating-the-exponent-of-discrete-power-law-data/) we can copy-pasta
-the maximum likelihood estimator (MLE) code to give us a value of 1.58 for the exponent for all items, 1.54 for comments and 1.77 for stories.
-As [a sanity check](https://en.wikipedia.org/wiki/Stable_distribution), they all fall in the range of `(1,3)`, which is expected
+Again thanks to [John D. Cook](https://www.johndcook.com/blog/2015/11/24/estimating-the-exponent-of-discrete-power-law-data/) we can copy-pasta
+the maximum likelihood estimator (MLE) code as above to give us a value of 1.58 for the exponent for all items, 1.54 for comments and 1.77 for stories.
+Again, as [a sanity check](https://en.wikipedia.org/wiki/Stable_distribution), they all fall in the range of `(1,3)`, which is expected
 for fat-tailed distributions.
-
-What does it mean? I dunno `-\_(:|)_/-`
 
 #### User URLs
 
